@@ -1,118 +1,80 @@
 from typing import Dict, Union
+from datetime import datetime
 
 
-def _time_a_include_b(range_a: dict, range_b: dict) -> bool:
+def datetime_conflict_detection(dt_dict1: Dict[str, Union[str, datetime]],
+                                dt_dict2: Dict[str, Union[str, datetime, None]]
+                                ) -> bool:
     """
-    判断时间返回A是否包含时间范围B
+    判断两个时间范围是有冲突
 
-    :param range_a: 时间范围
-    :param range_b: 时间范围
-    :return: 判断结果，True/False
-    """
-    include_flag = False
-    start_in = range_a['start_time'] <= range_b['start_time'] <= range_a['end_time']
-    end_in = False
-    if range_b['end_time']:
-        end_in = range_a['start_time'] <= range_b['end_time'] <= range_a['end_time']
-    if start_in or end_in:
-        include_flag = True
-    return include_flag
+    :param dt_dict1: 包含起始时间和结束时间的字典：{'start_time': '', 'end_time': ''}
+    :param dt_dict2: 包含起始时间和结束时间的字典：{'start_time': '', 'end_time': ''}
+    :return: 判断结果，True / False
 
-
-def time_conflict_detection(time_range1: Dict[str, Union[str, None]],
-                            time_range2: Dict[str, Union[str, None]],
-                            auto_exchange: bool = False) -> bool:
-    """
-    判断两个时间范围是否有冲突，接收的时间参数仅支持字符串，请自行做格式转换
-
-    :param time_range1: 包含起始时间和结束时间的字典 {'start_time': '10:00', 'end_time': '13:30'}
-    :param time_range2: 包含起始时间和结束时间的字典 {'start_time': '10:00', 'end_time': '13:30'}
-    :param auto_exchange: 如果结束时间小于起始时间，是否自动交换两个值
-    :return: 冲突检测结果， True/False
-
-    >>> time_a = {'start_time': '10:00', 'end_time': '13:30'}
-    >>> time_b = {'start_time': '10:30', 'end_time': '14:00'}
-    >>> time_conflict_detection(time_a, time_b)
-    True
-    >>> time_c = {'start_time': '10:00', 'end_time': None}
-    >>> time_d = {'start_time': '10:30', 'end_time': '14:00'}
-    >>> time_conflict_detection(time_c, time_d)
+    >>> datetime_format = "%Y-%m-%d %H:%M"
+    >>> dt1 = datetime.strptime("2021-11-21 12:00", datetime_format)
+    >>> dt2 = datetime.strptime("2021-11-21 13:00", datetime_format)
+    >>> dt3 = datetime.strptime("2021-11-22 15:00", datetime_format)
+    >>> dt4 = datetime.strptime("2021-11-22 16:00", datetime_format)
+    >>> dt_range1 = {'start_time': dt1, 'end_time': dt2}
+    >>> dt_range2 = {'start_time': dt3, 'end_time': dt4}
+    >>> datetime_conflict_detection(dt_range1, dt_range2)
     False
+    >>> dt_range1 = {'start_time': dt1, 'end_time': dt3}
+    >>> dt_range2 = {'start_time': dt2, 'end_time': dt4}
+    >>> datetime_conflict_detection(dt_range1, dt_range2)
+    True
     """
-    assert isinstance(time_range1, dict), "参数类型错误，接收参数格式：{start_time: [str,time], end_time: [str,None]}"
-    assert isinstance(time_range2, dict), "参数类型错误，接收参数格式：{start_time: [str,time], end_time: [str,None]}"
-    if not time_range1['start_time'] or not time_range2['start_time']:
+    assert isinstance(dt_dict1, dict), "参数类型错误，接收参数格式：{'start_time': datetime, 'end_time': datetime}"
+    assert isinstance(dt_dict2, dict), "参数类型错误，接收参数格式：{'start_time': datetime, 'end_time': datetime}"
+    if not dt_dict1.get('start_time') or not dt_dict2.get('start_time'):
         raise ValueError('传入的字典缺少字段： start_time ')
 
-    # 两个参数都只有一个时间的情况
-    if (not time_range1['end_time']) and (not time_range2['end_time']):
-        return time_range1['start_time'] == time_range2['start_time']
+    # 两个对象都没有截止时间
+    if not dt_dict1['end_time'] and not dt_dict2['end_time']:
+        return dt_dict1['start_time'] == dt_dict2['start_time']
 
-    # 冲突标记
-    detection_flag = False
+    # 第一个时间对象没有截止时间
+    if dt_dict1['end_time'] is None:
+        return dt_dict2['start_time'] <= dt_dict1['start_time'] <= dt_dict2['end_time']
 
-    # 判断时间2是否包含时间1
-    if time_range2['end_time']:
-        if time_range2['start_time'] > time_range2['end_time']:
-            if auto_exchange:
-                time_range2['start_time'], time_range2['end_time'] = time_range2['end_time'], time_range2['start_time']
-            else:
-                raise ValueError('时间范围错误, end_time 应该大于 start_time')
-        if _time_a_include_b(time_range2, time_range1):
-            detection_flag = True
+    # 第二个时间对象没有截止时间
+    if dt_dict2['end_time'] is None:
+        return dt_dict1['start_time'] <= dt_dict2['start_time'] <= dt_dict1['end_time']
 
-    # 判断时间1是否包含时间2
-    if time_range1['end_time']:
-        if time_range1['start_time'] > time_range1['end_time']:
-            if auto_exchange:
-                time_range1['start_time'], time_range1['end_time'] = time_range1['end_time'], time_range1['start_time']
-            else:
-                raise ValueError('时间范围错误, end_time 应该大于 start_time')
-        if _time_a_include_b(time_range1, time_range2):
-            detection_flag = True
-    return detection_flag
+    # 两个对象都有截止时间
+    return max(dt_dict1['start_time'], dt_dict2['start_time']) < min(dt_dict1['end_time'], dt_dict2['end_time'])
 
 
 if __name__ == '__main__':
     print(f' 时间冲突功能校验(部分情况) '.center(100, '*'))
-    time_A = {'start_time': '10:00', 'end_time': '13:30'}
-    time_B = {'start_time': '12:00', 'end_time': '13:00'}
-    res = time_conflict_detection(time_A, time_B)
-    print(f'【A包含B】 是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
+    dt_format = "%Y-%m-%d %H:%M"
+    datetime1 = datetime.strptime("2021-11-21 12:00", dt_format)
+    datetime2 = datetime.strptime("2021-11-21 13:00", dt_format)
+    datetime3 = datetime.strptime("2021-11-22 15:00", dt_format)
+    datetime4 = datetime.strptime("2021-11-22 16:00", dt_format)
+    dt_range_1 = {'start_time': datetime1, 'end_time': datetime2}
+    dt_range_2 = {'start_time': datetime3, 'end_time': datetime4}
+    res = datetime_conflict_detection(dt_range_1, dt_range_2)
+    print(f'【时间无交集】 冲突检测结果：{res}')
 
-    time_A = {'start_time': '12:00', 'end_time': '13:30'}
-    time_B = {'start_time': '10:00', 'end_time': '14:00'}
-    res = time_conflict_detection(time_A, time_B)
-    print(f'【B包含A】：是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
+    dt_range_1 = {'start_time': datetime1, 'end_time': datetime3}
+    dt_range_2 = {'start_time': datetime2, 'end_time': datetime4}
+    res = datetime_conflict_detection(dt_range_1, dt_range_2)
+    print(f'【时间有交集】 冲突检测结果：{res}')
 
-    time_A = {'start_time': '12:00', 'end_time': '13:30'}
-    time_B = {'start_time': '15:00', 'end_time': '18:00'}
-    res = time_conflict_detection(time_A, time_B)
-    print(f'【AB无交集】：是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
+    dt_range_1 = {'start_time': datetime2, 'end_time': None}
+    dt_range_2 = {'start_time': datetime1, 'end_time': datetime4}
+    res = datetime_conflict_detection(dt_range_1, dt_range_2)
+    print(f'【结束时间为空且包含】 冲突检测结果：{res}')
 
-    time_A = {'start_time': '12:00', 'end_time': None}
-    time_B = {'start_time': '15:00', 'end_time': None}
-    res = time_conflict_detection(time_A, time_B)
-    print(f'【AB截止时间为空】：是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
+    dt_range_1 = {'start_time': "2021-11-21 12:00", 'end_time': "2021-11-22 15:00"}
+    dt_range_2 = {'start_time': "2021-11-21 13:00", 'end_time': "2021-11-22 16:00"}
+    res = datetime_conflict_detection(dt_range_1, dt_range_2)
+    print(f'【使用日期时间字符串】 冲突检测结果：{res}')
 
-    time_A = {'start_time': '12:00', 'end_time': None}
-    time_B = {'start_time': '15:00', 'end_time': '18:00'}
-    res = time_conflict_detection(time_A, time_B)
-    print(f'【A截止时间为空】：是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
-
-    time_A = {'start_time': '12:00', 'end_time': '18:00'}
-    time_B = {'start_time': '15:00', 'end_time': None}
-    res = time_conflict_detection(time_A, time_B)
-    print(f'【B截止时间为空】：是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
-
-    time_A = {'start_time': '12:00', 'end_time': '10:00'}
-    time_B = {'start_time': '11:00', 'end_time': None}
-    res = time_conflict_detection(time_A, time_B, auto_exchange=True)
-    print(f'【自动交换起始截止时间】：是否冲突：{res}, '
-          f'时间A：{time_A["start_time"]}--{time_A["end_time"]}, 时间B：{time_B["start_time"]}--{time_B["end_time"]}')
+    dt_range_1 = {'start_time': "12:00", 'end_time': "15:00"}
+    dt_range_2 = {'start_time': "13:00", 'end_time': "16:00"}
+    res = datetime_conflict_detection(dt_range_1, dt_range_2)
+    print(f'【不包含日期】 冲突检测结果：{res}')
